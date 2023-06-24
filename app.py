@@ -209,34 +209,33 @@ def stop_following(follow_id):
     return redirect(f"/users/{g.user.id}/following")
 
 
-@app.route('/users/profile/<int:user_id>', methods=["GET", "POST"])
-def profile(user_id):
+@app.route('/users/profile', methods=["GET", "POST"])
+def profile():
     """Update profile for current user."""
 
     if not g.user:
         flash("Access unauthorized.", "danger")
         return redirect("/")
     
-    user = User.query.get_or_404(user_id)
     form = EditUserForm()
 
     if form.validate_on_submit():
         password = form.password.data
-        test = User.authenticate(user.username, password)
+        test = User.authenticate(g.user.username, password)
         if test:
-            user.username = form.username.data
-            user.email = form.email.data
-            user.image_url = form.image_url.data
-            user.header_image_url = form.header_image_url.data
-            user.bio = form.bio.data
-            user.location = form.location.data
+            g.user.username = form.username.data
+            g.user.email = form.email.data
+            g.user.image_url = form.image_url.data
+            g.user.header_image_url = form.header_image_url.data
+            g.user.bio = form.bio.data
+            g.user.location = form.location.data
             db.session.commit()
-            return redirect(f"users/{user.id}")
+            return redirect(f"users/{g.user.id}")
         else:
             flash("Wrong password!", "danger")
-            return render_template("users/edit.html", user=user, form=form)
+            return render_template("users/edit.html", user=g.user, form=form)
 
-    return render_template("users/edit.html", user=user, form=form)
+    return render_template("users/edit.html", user=g.user, form=form)
 
 
 @app.route('/users/delete', methods=["POST"])
@@ -317,11 +316,24 @@ def homepage():
     """
 
     if g.user:
-        messages = (Message
-                    .query
-                    .order_by(Message.timestamp.desc())
-                    .limit(100)
-                    .all())
+        following = g.user.following
+        new_messages = []
+        for i in range(len(following)):
+            for f in following[i].messages:
+                new_messages.append(f)
+
+        all_messages = (Message
+            .query
+            .order_by(Message.timestamp.desc())
+            .all())
+        
+        messages = []
+        for m in all_messages:
+            if m in new_messages:
+                messages.append(m)
+            if len(messages) > 100:
+                break
+
 
         return render_template('home.html', messages=messages)
 
