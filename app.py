@@ -5,7 +5,7 @@ from flask_debugtoolbar import DebugToolbarExtension
 from sqlalchemy.exc import IntegrityError
 
 from forms import UserAddForm, LoginForm, MessageForm, EditUserForm
-from models import db, connect_db, User, Message
+from models import db, connect_db, User, Message, Likes
 
 CURR_USER_KEY = "curr_user"
 
@@ -143,7 +143,7 @@ def users_show(user_id):
     """Show user profile."""
 
     user = User.query.get_or_404(user_id)
-
+    likes =Likes.query.filter_by(user_id=user.id).count()
     # snagging messages in order from the database;
     # user.messages won't be in order by default
     messages = (Message
@@ -152,7 +152,7 @@ def users_show(user_id):
                 .order_by(Message.timestamp.desc())
                 .limit(100)
                 .all())
-    return render_template('users/show.html', user=user, messages=messages)
+    return render_template('users/show.html', user=user, messages=messages, likes=likes)
 
 
 @app.route('/users/<int:user_id>/following')
@@ -162,9 +162,9 @@ def show_following(user_id):
     if not g.user:
         flash("Access unauthorized.", "danger")
         return redirect("/")
-
+    likes = Likes.query.filter_by(user_id=g.user.id).count()
     user = User.query.get_or_404(user_id)
-    return render_template('users/following.html', user=user)
+    return render_template('users/following.html', user=user, likes=likes)
 
 
 @app.route('/users/<int:user_id>/followers')
@@ -175,8 +175,9 @@ def users_followers(user_id):
         flash("Access unauthorized.", "danger")
         return redirect("/")
 
+    likes = likes.query.filter_by(user_id=g.user.id).count()
     user = User.query.get_or_404(user_id)
-    return render_template('users/followers.html', user=user)
+    return render_template('users/following.html', user=user, likes=likes)
 
 
 @app.route('/users/follow/<int:follow_id>', methods=['POST'])
@@ -302,6 +303,48 @@ def messages_destroy(message_id):
 
     return redirect(f"/users/{g.user.id}")
 
+##############################################################################
+# Like routes
+
+@app.route('/users/add_like/<int:message_id>', methods=["POST"])
+def add_like(message_id):
+    if g.user:
+        like = Likes(user_id=g.user.id, message_id=message_id)
+        db.session.add(like)
+        db.session.commit()
+    return redirect("/")
+
+@app.route('/users/remove_like/<int:message_id>', methods=["POST"])
+def remove_like(message_id):
+    if g.user:
+        like = Likes.query.filter_by(message_id=message_id).all()
+        db.session.delete(like[0])
+        db.session.commit()
+    return redirect("/")
+
+@app.route('/users/<int:user_id>/likes')
+def show_likes(user_id):
+    if not g.user:
+        flash("Access unauthorized.", "danger")
+        return redirect("/")
+    user = User.query.get_or_404(user_id)
+    likes = user.likes
+    like_amount = Likes.query.filter_by(user_id=user.id).count()
+    
+    all_messages = (Message
+            .query
+            .order_by(Message.timestamp.desc())
+            .all())
+        
+    messages = []
+    for m in all_messages:
+        if m in likes:
+            messages.append(m)
+            if len(messages) > 100:
+                break   
+    
+    return render_template("users/like.html", messages=messages, user=user, likes=like_amount)
+
 
 ##############################################################################
 # Homepage and error pages
@@ -317,10 +360,13 @@ def homepage():
 
     if g.user:
         following = g.user.following
+        my_messages = g.user.messages
         new_messages = []
         for i in range(len(following)):
             for f in following[i].messages:
                 new_messages.append(f)
+        for m in my_messages:
+            new_messages.append(m)
 
         all_messages = (Message
             .query
@@ -333,9 +379,13 @@ def homepage():
                 messages.append(m)
             if len(messages) > 100:
                 break
+        
+        likes = []
+        all_likes = Likes.query.filter_by(user_id=g.user.id).all()
+        for i in range(len(all_likes)):
+            likes.append(all_likes[i].message_id)
 
-
-        return render_template('home.html', messages=messages)
+        return render_template('home.html', messages=messages, likes=likes)
 
     else:
         return render_template('home-anon.html')
