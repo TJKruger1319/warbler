@@ -173,6 +173,7 @@ nav + .container {
 #profile-avatar {
   width: 200px;
   height: 200px;
+  left: -150px;
   border: 5px solid #fff;
   margin-top: -120px;
   z-index: 1;
