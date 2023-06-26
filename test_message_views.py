@@ -71,3 +71,76 @@ class MessageViewTestCase(TestCase):
 
             msg = Message.query.one()
             self.assertEqual(msg.text, "Hello")
+    def FollowPages(self):
+        """Can see if your following page is logged in"""
+        with self.client as c:
+            with c.session_transaction() as sess:
+                sess[CURR_USER_KEY] = self.testuser.id
+                resp = c.get("/users/1/following")
+
+                self.assertEqual(resp.status_code, 200)
+                self.assert_template_used('user/following.html')
+
+    def followPagesLoggedOut(self):
+        """Can't see following page is logged out"""
+        with self.client as c:
+            with c.session_transaction() as sess:
+                sess[CURR_USER_KEY] = None
+                resp = c.get("/users/1/following")
+
+                self.assertEqual(resp.status_code, 302)
+                self.assertTrue(resp.search('Access unauthorized',
+                    resp.get_data(as_text=True)))
+                
+    def addMessageNoLogged(self):
+        """Can't post a message if you're not logged in"""
+        with self.client as c:
+            with c.session_transaction() as sess:
+                sess[CURR_USER_KEY] = None
+                resp = c.post("/messages/new", data={"text": "Hello"})
+                self.assertEqual(resp.status_code, 302)
+                self.assertTrue(resp.search('Access unauthorized',
+                    resp.get_data(as_text=True)))
+                
+    def deleteMessage(self):
+        """Delete a messsage"""
+        with self.client as c:
+            with c.session_transaction() as sess:
+                sess[CURR_USER_KEY] = self.testuser.id
+            resp = c.post("/messages/1/delete", data={"text": "Hello"})
+
+            self.assertEqual(resp.status_code, 302)
+
+            msg = Message.query.one()
+            self.assertEqual(msg, [])
+
+    def addMessageNoLogged(self):
+        """Can't delete a message if you're not logged in"""
+        with self.client as c:
+            with c.session_transaction() as sess:
+                sess[CURR_USER_KEY] = None
+                resp = c.post("/messages/1/delete", data={"text": "Hello"})
+                self.assertEqual(resp.status_code, 302)
+                self.assertTrue(resp.search('Access unauthorized',
+                    resp.get_data(as_text=True)))
+                
+    def addSomeOtherUserMessage(self):
+        """Can't add a message to someone's else account"""
+        with self.client as c:
+            with c.session_transaction() as sess:
+                sess[CURR_USER_KEY] = self.testuser.id
+                resp = c.post("/messages/new", data={"text": "Hello", "user_id": 2})
+                self.assertEqual(resp.status_code, 302)
+                self.assertTrue(resp.search('Access unauthorized',
+                    resp.get_data(as_text=True)))
+                
+    def deleteSomeOtherUserMessage(self):
+        """Can't delete another user's message"""
+        with self.client as c:
+            with c.session_transaction() as sess:
+                sess[CURR_USER_KEY] = self.testuser.id
+                resp = c.post("/messages/1/delete", data={"text": "Hello", "user_id": 2})
+                self.assertEqual(resp.status_code, 302)
+                self.assertTrue(resp.search('Access unauthorized',
+                    resp.get_data(as_text=True)))
+
