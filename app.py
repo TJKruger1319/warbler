@@ -308,14 +308,6 @@ def messages_destroy(message_id):
 
 @app.route('/users/add_like/<int:message_id>', methods=["POST"])
 def add_like(message_id):
-    if g.user:
-        like = Likes(user_id=g.user.id, message_id=message_id)
-        db.session.add(like)
-        db.session.commit()
-    return redirect("/")
-
-@app.route('/users/remove_like/<int:message_id>', methods=["POST"])
-def remove_like(message_id):
     if not g.user:
         flash("Access unauthorized.", "danger")
         return redirect("/")
@@ -333,6 +325,14 @@ def remove_like(message_id):
 
     db.session.commit()
 
+    return redirect("/")
+
+@app.route('/users/remove_like/<int:message_id>', methods=["POST"])
+def remove_like(message_id):
+    if g.user:
+        like = Likes.query.filter_by(message_id=message_id).all()
+        db.session.delete(like[0])
+        db.session.commit()
     return redirect("/")
 
 @app.route('/users/<int:user_id>/likes')
