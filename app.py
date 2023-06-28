@@ -1,6 +1,6 @@
 import os
 
-from flask import Flask, render_template, request, flash, redirect, session, g
+from flask import Flask, render_template, request, flash, redirect, session, g, abort
 from flask_debugtoolbar import DebugToolbarExtension
 from sqlalchemy.exc import IntegrityError
 
@@ -316,10 +316,23 @@ def add_like(message_id):
 
 @app.route('/users/remove_like/<int:message_id>', methods=["POST"])
 def remove_like(message_id):
-    if g.user:
-        like = Likes.query.filter_by(message_id=message_id).all()
-        db.session.delete(like[0])
-        db.session.commit()
+    if not g.user:
+        flash("Access unauthorized.", "danger")
+        return redirect("/")
+
+    liked_message = Message.query.get_or_404(message_id)
+    if liked_message.user_id == g.user.id:
+        return abort(403)
+
+    user_likes = g.user.likes
+
+    if liked_message in user_likes:
+        g.user.likes = [like for like in user_likes if like != liked_message]
+    else:
+        g.user.likes.append(liked_message)
+
+    db.session.commit()
+
     return redirect("/")
 
 @app.route('/users/<int:user_id>/likes')
@@ -327,23 +340,9 @@ def show_likes(user_id):
     if not g.user:
         flash("Access unauthorized.", "danger")
         return redirect("/")
+
     user = User.query.get_or_404(user_id)
-    likes = user.likes
-    like_amount = Likes.query.filter_by(user_id=user.id).count()
-    
-    all_messages = (Message
-            .query
-            .order_by(Message.timestamp.desc())
-            .all())
-        
-    messages = []
-    for m in all_messages:
-        if m in likes:
-            messages.append(m)
-            if len(messages) > 100:
-                break   
-    
-    return render_template("users/like.html", messages=messages, user=user, likes=like_amount)
+    return render_template('users/like.html', user=user, likes=user.likes)
 
 
 ##############################################################################
