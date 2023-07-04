@@ -143,7 +143,6 @@ def users_show(user_id):
     """Show user profile."""
 
     user = User.query.get_or_404(user_id)
-    likes =Likes.query.filter_by(user_id=user.id).count()
     # snagging messages in order from the database;
     # user.messages won't be in order by default
     messages = (Message
@@ -152,7 +151,7 @@ def users_show(user_id):
                 .order_by(Message.timestamp.desc())
                 .limit(100)
                 .all())
-    return render_template('users/show.html', user=user, messages=messages, likes=likes)
+    return render_template('users/show.html', user=user, messages=messages)
 
 
 @app.route('/users/<int:user_id>/following')
@@ -162,9 +161,8 @@ def show_following(user_id):
     if not g.user:
         flash("Access unauthorized.", "danger")
         return redirect("/")
-    likes = Likes.query.filter_by(user_id=g.user.id).count()
     user = User.query.get_or_404(user_id)
-    return render_template('users/following.html', user=user, likes=likes)
+    return render_template('users/following.html', user=user)
 
 
 @app.route('/users/<int:user_id>/followers')
@@ -175,9 +173,9 @@ def users_followers(user_id):
         flash("Access unauthorized.", "danger")
         return redirect("/")
 
-    likes = likes.query.filter_by(user_id=g.user.id).count()
+
     user = User.query.get_or_404(user_id)
-    return render_template('users/following.html', user=user, likes=likes)
+    return render_template('users/following.html', user=user)
 
 
 @app.route('/users/follow/<int:follow_id>', methods=['POST'])
@@ -330,8 +328,8 @@ def add_like(message_id):
 @app.route('/users/remove_like/<int:message_id>', methods=["POST"])
 def remove_like(message_id):
     if g.user:
-        like = Likes.query.filter_by(message_id=message_id).all()
-        db.session.delete(like[0])
+        like = Likes.query.filter_by(message_id=message_id).first()
+        db.session.delete(like)
         db.session.commit()
     return redirect("/")
 
@@ -358,33 +356,19 @@ def homepage():
     """
 
     if g.user:
-        following = g.user.following
-        my_messages = g.user.messages
-        new_messages = []
-        for i in range(len(following)):
-            for f in following[i].messages:
-                new_messages.append(f)
-        for m in my_messages:
-            new_messages.append(m)
+        following_ids = [f.id for f in g.user.following] + [g.user.id]
 
-        all_messages = (Message
-            .query
-            .order_by(Message.timestamp.desc())
-            .all())
+        messages = (Message
+                    .query
+                    .filter(Message.user_id.in_(following_ids))
+                    .order_by(Message.timestamp.desc())
+                    .limit(100)
+                    .all())
         
-        messages = []
-        for m in all_messages:
-            if m in new_messages:
-                messages.append(m)
-            if len(messages) > 100:
-                break
-        
-        likes = []
         all_likes = Likes.query.filter_by(user_id=g.user.id).all()
-        for i in range(len(all_likes)):
-            likes.append(all_likes[i].message_id)
+        like_message_ids = [like.message_id for like in all_likes]
 
-        return render_template('home.html', messages=messages, likes=likes)
+        return render_template('home.html', messages=messages, likes=like_message_ids)
 
     else:
         return render_template('home-anon.html')
